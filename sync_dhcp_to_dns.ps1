@@ -1,12 +1,80 @@
-#syncs dhcp reservations to DNS in windows
+#syncs dhcp reservations to DNS in windows and updates hostnames in Unifi controller
+# config.js example
+#{
+#"scope":"192.168.0.0",
+#"zone":"your.domain.com",
+#"reversezone":"0.168.192.in-addr.arpa",
+#"uUsername":"unifi_account",
+#"uPassword":"unifi_password",
+#"uSiteID":"default",
+#"uController":"https://unifi.host.name:8443"
+#}
 #if there is a 12 option for DHCP - it will use it as a dns hostname
 #$scope = "192.168.0.0"
 #$zone = "your.domain.com"
 #$reversezone = "0.168.192.in-addr.arpa"
 param (
-    [Parameter(Mandatory=$true)] $scope, [Parameter(Mandatory=$true)] $zone, [Parameter(Mandatory=$true)] $reversezone
-    )
+    [Parameter(Mandatory=$true)] $config
 
+)
+$script:conf=Get-Content $config | ConvertFrom-Json
+
+$ErrorActionPreference='Stop'
+
+
+$script:uAuthBody = @{"username" = $script:conf.uUsername; "password" = $script:conf.uPassword }
+$script:uHeaders = @{"Content-Type" = "application/json" }
+
+# Allow connection with the Unifi Self Signed Cert
+# add-type @"
+#using System.Net;
+#using System.Security.Cryptography.X509Certificates;
+#public class TrustAllCertsPolicy : ICertificatePolicy {
+#    public bool CheckValidationResult(
+#        ServicePoint srvPoint, X509Certificate certificate,
+#        WebRequest request, int certificateProblem) {
+#        return true;
+#    }
+#}
+#"@ 
+#[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Ssl3, [Net.SecurityProtocolType]::Tls, [Net.SecurityProtocolType]::Tls11, [Net.SecurityProtocolType]::Tls12
+    $script:uLogin = Invoke-RestMethod -Method Post -Uri "$($script:conf.uController)/api/login" -Body ($script:uAuthBody | convertto-json) -Headers $script:uHeaders -SessionVariable $script:UBNT
+
+
+function CheckUnifiDevice(){
+    Param ($dhcp_mac,$name)
+    $mac=$dhcp_mac -replace '-', ':'
+    try {
+        $dev_info = Invoke-RestMethod -Method Get -Uri "$($script:conf.uController)/api/s/$($script:conf.uSiteID)/stat/user/$($mac)" -WebSession $script:UBNT -Headers $script:uHeaders -ErrorAction SilentlyContinue
+    }
+    catch { return }
+    if ($null -ne $dev_info.data.name)
+    {
+        if ($name -ne $dev_info.data.name)
+        {
+            $body = @{
+            "name"=$name
+             } | ConvertTo-Json
+             Write-Output "Changing $($dev_info.data.name) to $($name)"
+            $url = "$($script:uController)/api/s/$($script:uSiteID)/rest/user/$($dev_info.data._id)"
+            Write-Output $url
+            $res = Invoke-RestMethod -Method Put -Uri $url -WebSession $script:UBNT -Headers $script:uHeaders -Body $body
+        }
+        return
+    }
+    if ($null -ne $dev_info.data.hostname)
+    {
+        if ($name -ne $dev_info.data.hostname)
+        {
+            $body = @{
+            "name"=$name
+             } | ConvertTo-Json
+             Write-Output "Changing $($dev_info.data.hostname) to $($name)"
+            $res = Invoke-RestMethod -Method Put -Uri "$($script:uController)/api/s/$($script:uSiteID)/rest/user/$($dev_info.data.user_id)" -WebSession $script:UBNT -Headers $script:uHeaders -Body $body
+        }
+    }
+}
 function AddDnsEntry {
     Param (
         $zone, $hostname, $ip
@@ -79,15 +147,15 @@ function CheckReservation {
   }
   AddDnsEntry -zone $zone -hostname $hostname -ip $reservation.IPAddress
   CheckRR -hostname "$hostname.$zone." -ip $reservation.IPAddress.IPAddressToString -RRZone $reversezone
+  CheckUnifiDevice -dhcp_mac $reservation.ClientId -name $hostname
 }
-
 
 
 $log = $Env:Temp +"\pslogs\dhcp-sync.log"
 Start-Transcript -path $log -append
-$dhcp_reservations = @(Get-DhcpServerv4Reservation -ScopeId $scope)
+$dhcp_reservations = @(Get-DhcpServerv4Reservation -ScopeId $script:conf.scope)
 $dhcp_reservations | ForEach-Object {
-   CheckReservation -reservation $_ -zone $zone -reversezone $reversezone
+   CheckReservation -reservation $_ -zone $script:conf.zone -reversezone $script:conf.reversezone
 }
 
 Stop-Transcript
