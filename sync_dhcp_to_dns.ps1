@@ -10,10 +10,16 @@
 #"uController":"https://unifi.host.name:8443"
 #}
 #if there is a 12 option for DHCP - it will use it as a dns hostname
+#$scope = "192.168.0.0"
+#$zone = "your.domain.com"
+#$reversezone = "0.168.192.in-addr.arpa"
 param (
     [Parameter(Mandatory=$true)] $config
 
 )
+$log = $Env:Temp +"\pslogs\dhcp-sync.log"
+Start-TranScript -path $log -append
+
 $script:conf=Get-Content $config | ConvertFrom-Json
 
 $ErrorActionPreference='Stop'
@@ -36,14 +42,14 @@ $script:uHeaders = @{"Content-Type" = "application/json" }
 #"@ 
 #[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Ssl3, [Net.SecurityProtocolType]::Tls, [Net.SecurityProtocolType]::Tls11, [Net.SecurityProtocolType]::Tls12
-    $script:uLogin = Invoke-RestMethod -Method Post -Uri "$($script:conf.uController)/api/login" -Body ($script:uAuthBody | convertto-json) -Headers $script:uHeaders -SessionVariable $script:UBNT
 
 
 function CheckUnifiDevice(){
     Param ($dhcp_mac,$name)
+    $script:uLogin = Invoke-RestMethod -Method Post -Uri "$($script:conf.uController)/api/login" -Body ($script:uAuthBody | convertto-json) -Headers $script:uHeaders -SessionVariable UBNT
     $mac=$dhcp_mac -replace '-', ':'
     try {
-        $dev_info = Invoke-RestMethod -Method Get -Uri "$($script:conf.uController)/api/s/$($script:conf.uSiteID)/stat/user/$($mac)" -WebSession $script:UBNT -Headers $script:uHeaders -ErrorAction SilentlyContinue
+        $dev_info = Invoke-RestMethod -Method Get -Uri "$($script:conf.uController)/api/s/$($script:conf.uSiteID)/stat/user/$($mac)" -WebSession $UBNT -Headers $script:uHeaders -ErrorAction SilentlyContinue
     }
     catch { return }
     if ($null -ne $dev_info.data.name)
@@ -148,11 +154,9 @@ function CheckReservation {
 }
 
 
-$log = $Env:Temp +"\pslogs\dhcp-sync.log"
-Start-Transcript -path $log -append
 $dhcp_reservations = @(Get-DhcpServerv4Reservation -ScopeId $script:conf.scope)
 $dhcp_reservations | ForEach-Object {
    CheckReservation -reservation $_ -zone $script:conf.zone -reversezone $script:conf.reversezone
 }
 
-Stop-Transcript
+Stop-TranScript
