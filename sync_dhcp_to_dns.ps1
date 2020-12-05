@@ -10,9 +10,6 @@
 #"uController":"https://unifi.host.name:8443"
 #}
 #if there is a 12 option for DHCP - it will use it as a dns hostname
-#$scope = "192.168.0.0"
-#$zone = "your.domain.com"
-#$reversezone = "0.168.192.in-addr.arpa"
 param (
     [Parameter(Mandatory=$true)] $config
 
