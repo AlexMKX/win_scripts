@@ -68,6 +68,11 @@ function CheckReservation {
   if ($null -ne $altfqdn)
   {
     $hostname= @($altfqdn.Value.Split('.'))[0]
+    if ($altfqdn -ne $reservation.Name)
+    {
+        $new_hostname= [System.String] $altfqdn.Value
+        Set-DhcpServerv4Reservation -IPAddress $reservation.IPAddress -Name $new_hostname
+    }
   }
   else {
     $hostname = @($reservation.Name.Split('.'))[0]
