@@ -60,10 +60,10 @@ function CheckUnifiDevice(){
             "name"=$name
              } | ConvertTo-Json
              Write-Output "Changing $($dev_info.data.name) to $($name)"
-            $url = "$($script:conf.uController)/api/s/$($script:uSiteID)/rest/user/$($dev_info.data._id)"
+            $url = "$($script:conf.uController)/api/s/$($script:conf.uSiteID)/rest/user/$($dev_info.data._id)"
             Write-Output $url
             Write-Output $body
-            $res = Invoke-RestMethod -Method Put -Uri $url -WebSession $script:UBNT -Headers $script:uHeaders -Body $body
+            $res = Invoke-RestMethod -Method Put -Uri $url -WebSession $UBNT -Headers $script:uHeaders -Body $body
         }
         return
     }
@@ -75,7 +75,7 @@ function CheckUnifiDevice(){
             "name"=$name
              } | ConvertTo-Json
              Write-Output "Changing $($dev_info.data.hostname) to $($name)"
-            $res = Invoke-RestMethod -Method Put -Uri "$($script:uController)/api/s/$($script:uSiteID)/rest/user/$($dev_info.data.user_id)" -WebSession $script:UBNT -Headers $script:uHeaders -Body $body
+            $res = Invoke-RestMethod -Method Put -Uri "$($script:conf.uController)/api/s/$($script:conf.uSiteID)/rest/user/$($dev_info.data.user_id)" -WebSession $UBNT -Headers $script:uHeaders -Body $body
         }
     }
 }
