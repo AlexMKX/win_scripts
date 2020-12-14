@@ -60,8 +60,9 @@ function CheckUnifiDevice(){
             "name"=$name
              } | ConvertTo-Json
              Write-Output "Changing $($dev_info.data.name) to $($name)"
-            $url = "$($script:uController)/api/s/$($script:uSiteID)/rest/user/$($dev_info.data._id)"
+            $url = "$($script:conf.uController)/api/s/$($script:uSiteID)/rest/user/$($dev_info.data._id)"
             Write-Output $url
+            Write-Output $body
             $res = Invoke-RestMethod -Method Put -Uri $url -WebSession $script:UBNT -Headers $script:uHeaders -Body $body
         }
         return
